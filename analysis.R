@@ -2,6 +2,8 @@
 library(tidyverse)
 library(lme4)
 library(ltm)
+library(modelsummary)
+library(mirt)
 library(optimx)
 control.lmer <- lmerControl('optimx', optCtrl = list(method = 'nlminb'))
 
@@ -42,16 +44,32 @@ dat <- data.frame(t = unlist(data$t), y = unlist(data$y),
            inv.logit.rs = inv.logit(rs))
 
 # full model
-summary(lmer(log(t) ~ inv.logit.content + inv.logit.rs + z +
-                      (1 + inv.logit.content + inv.logit.rs | id) + (1 | item),
-             dat, control = control.lmer))
+fit <- lmer(log(t) ~ inv.logit.content + inv.logit.rs + z +
+                     (1 + inv.logit.content + inv.logit.rs | id) + (1 | item),
+            dat, control = control.lmer)
+summary(fit)
+get_gof(fit)
 
 # content only
-summary(lmer(log(t) ~ inv.logit.content + z +
-                      (1 + inv.logit.content | id) + (1 | item),
-             dat, control = control.lmer))
+fit <- lmer(log(t) ~ inv.logit.content + z +
+                     (1 + inv.logit.content + | id) + (1 | item),
+            dat, control = control.lmer)
+summary(fit)
+get_gof(fit)
 
 # response style only
-summary(lmer(log(t) ~ inv.logit.rs + z +
-                      (1 + inv.logit.rs | id) + (1 | item),
-             dat, control = control.lmer))
+fit <- lmer(log(t) ~ inv.logit.rs + z +
+                     (1 + inv.logit.rs | id) + (1 | item),
+            dat, control = control.lmer)
+summary(fit)
+get_gof(fit)
+
+# check model fit
+for (d in 1:data$D) {
+    fit <- mirt(y[, data$d == d], 1, verbose = F, itemtype = 'graded', SE = T)
+    fit.i <- itemfit(fit)
+    result <- c(mean(fit.i[, 'p.S_X2'] < 0.05), mean(fit.i[, 'RMSEA.S_X2'] < 0.06))
+    fit.p <- personfit(fit, 'EAP')
+    result <- c(result, mean(abs(fit.p[, 'Zh']) > 2))
+    print(format(round(result, 4), nsmall = 4))
+}
